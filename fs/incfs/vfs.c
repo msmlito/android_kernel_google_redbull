@@ -1881,6 +1881,25 @@ void incfs_kill_sb(struct super_block *sb)
 	pr_debug("incfs: unmount\n");
 	generic_shutdown_super(sb);
 	incfs_free_mount_info(mi);
+
+	/*
+	 * We must kill the super before freeing mi, since killing the super
+	 * triggers inode eviction, which triggers the final update of the
+	 * backing file, which uses certain information for mi
+	 */
+	kill_anon_super(sb);
+
+	if (mi) {
+		if (mi->mi_backing_dir_path.dentry)
+			dinode = d_inode(mi->mi_backing_dir_path.dentry);
+
+		if (dinode) {
+			if (mi->mi_index_dir && mi->mi_index_free)
+				vfs_rmdir(dinode, mi->mi_index_dir);
+		}
+		incfs_free_mount_info(mi);
+		sb->s_fs_info = NULL;
+	}
 }
 
 static int show_options(struct seq_file *m, struct dentry *root)
